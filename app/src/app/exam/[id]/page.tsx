@@ -38,11 +38,12 @@ const EXAM_SPECS: Record<string, ExamSpec> = {
   "D2-D2E": { questions: 45, time: 26 * 60, pass: 42, label: "Nâng Hạng D2 → D2E" },
 };
 
-async function getQuestions(topicId?: string, pageSize?: number) {
+async function getQuestions(topicId?: string, pageSize?: number, mode?: string) {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
   const params = new URLSearchParams();
   params.set("pageSize", String(pageSize || 600));
   if (topicId) params.set("topicId", topicId);
+  if (mode) params.set("mode", mode);
 
   const res = await fetch(`${baseUrl}/api/questions?${params.toString()}`, { cache: "no-store" });
   if (!res.ok) {
@@ -66,7 +67,7 @@ export default async function ExamPage({ params, searchParams }: PageProps) {
   const passThreshold = spec ? spec.pass : (questionCount <= 35 ? 32 : questionCount <= 40 ? 36 : 42);
   const examLabel = spec ? spec.label : (isPractice ? "Luyện Tập" : `Sát Hạch — ${questionCount} Câu`);
 
-  const data = await getQuestions(topicId, questionCount);
+  const data = await getQuestions(topicId, questionCount, isPractice ? "practice" : undefined);
   const questions = data.questions || [];
 
   const examConfig = {

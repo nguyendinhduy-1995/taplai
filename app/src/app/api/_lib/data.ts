@@ -63,11 +63,11 @@ export function scoreSubmission(questions: Question[], responses: { questionId: 
     return {
       questionId: r.questionId,
       correctAnswerId: correctAns?.id ?? "",
-      yourAnswerId: r.answerId ?? null,
-      correct,
+      selectedAnswerId: r.answerId ?? null,
+      isCorrect: correct,
     };
   });
-  const correctCount = details.filter((d) => d.correct).length;
+  const correctCount = details.filter((d) => d.isCorrect).length;
   const total = questions.length;
   const scorePercent = total === 0 ? 0 : Math.round((correctCount / total) * 100);
   return { details, correctCount, total, scorePercent };

@@ -4,9 +4,11 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import styles from "./page.module.css";
 
+
 interface Answer {
   id: string;
   content: string;
+  isCorrect?: boolean;
 }
 
 interface Question {
@@ -54,6 +56,7 @@ export default function ExamClient({ initialQuestions, config }: ExamClientProps
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [result, setResult] = useState<ExamResult | null>(null);
   const [showExplanation, setShowExplanation] = useState<Record<string, boolean>>({});
+  const [showGrid, setShowGrid] = useState(false);
 
   const currentQuestion = questions[currentIndex];
   const totalQuestions = questions.length;
@@ -77,6 +80,8 @@ export default function ExamClient({ initialQuestions, config }: ExamClientProps
 
   const handleSelectAnswer = (questionId: string, answerId: string) => {
     if (isSubmitted) return;
+    // In practice mode, don't allow changing answer once selected
+    if (config.isPractice && selectedAnswers[questionId]) return;
     setSelectedAnswers((prev) => ({
       ...prev,
       [questionId]: answerId,
@@ -118,19 +123,56 @@ export default function ExamClient({ initialQuestions, config }: ExamClientProps
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const getAnswerClass = (questionId: string, answerId: string) => {
+  /**
+   * Determine the style for an answer button.
+   * Uses inline styles for practice mode feedback (green/red) to ensure
+   * they override CSS module classes reliably.
+   */
+  const getAnswerStyle = (questionId: string, answerId: string): { className: string; style?: React.CSSProperties } => {
     const isSelected = selectedAnswers[questionId] === answerId;
+    const question = questions.find((q) => q.id === questionId);
+    const hasAnswered = !!selectedAnswers[questionId];
 
+    // After exam submission — check result details
     if (isSubmitted && result) {
       const detail = result.details?.find((d) => d.questionId === questionId);
       if (detail) {
-        if (answerId === detail.correctAnswerId) return styles.answerCorrect;
-        if (isSelected && answerId !== detail.correctAnswerId) return styles.answerWrong;
+        if (answerId === detail.correctAnswerId) {
+          return {
+            className: styles.answerCorrect,
+            style: { borderColor: '#10b981', background: '#ecfdf5', color: '#065f46' },
+          };
+        }
+        if (isSelected && answerId !== detail.correctAnswerId) {
+          return {
+            className: styles.answerWrong,
+            style: { borderColor: '#ef4444', background: '#fef2f2', color: '#991b1b' },
+          };
+        }
       }
     }
 
-    if (isSelected) return styles.answerSelected;
-    return styles.answerOption;
+    // Practice mode — show correct/wrong immediately when answered
+    if (config.isPractice && hasAnswered) {
+      const answer = question?.answers.find((a) => a.id === answerId);
+      if (answer?.isCorrect) {
+        return {
+          className: styles.answerCorrect,
+          style: { borderColor: '#10b981', background: '#ecfdf5', color: '#065f46' },
+        };
+      }
+      if (isSelected && !answer?.isCorrect) {
+        return {
+          className: styles.answerWrong,
+          style: { borderColor: '#ef4444', background: '#fef2f2', color: '#991b1b' },
+        };
+      }
+    }
+
+    if (isSelected) {
+      return { className: styles.answerSelected };
+    }
+    return { className: styles.answerOption };
   };
 
   // ── Results Screen ──
@@ -207,7 +249,7 @@ export default function ExamClient({ initialQuestions, config }: ExamClientProps
 
       {/* Two-Column Layout */}
       <div className={styles.examLayout}>
-        {/* Left Column: Question Grid */}
+        {/* Left Column: Question Grid (desktop) */}
         <aside className={styles.sidebar}>
           <div className={styles.questionGrid}>
             {questions.map((q, idx) => {
@@ -231,24 +273,6 @@ export default function ExamClient({ initialQuestions, config }: ExamClientProps
 
         {/* Right Column: Question Content */}
         <section className={styles.questionArea}>
-          {/* Top Navigation */}
-          <div className={styles.navRow}>
-            <button
-              className={styles.navBtn}
-              onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
-              disabled={currentIndex === 0}
-            >
-              Câu Trước
-            </button>
-            <button
-              className={styles.navBtnPrimary}
-              onClick={() => setCurrentIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
-              disabled={currentIndex === totalQuestions - 1}
-            >
-              Câu Sau
-            </button>
-          </div>
-
           {/* Question Card */}
           <div className={styles.questionCard}>
             <h2 className={styles.questionTitle}>
@@ -270,17 +294,21 @@ export default function ExamClient({ initialQuestions, config }: ExamClientProps
 
             {/* Answers */}
             <div className={styles.answersList}>
-              {currentQuestion.answers.map((answer, idx) => (
-                <button
-                  key={answer.id}
-                  className={getAnswerClass(currentQuestion.id, answer.id)}
-                  onClick={() => handleSelectAnswer(currentQuestion.id, answer.id)}
-                  disabled={isSubmitted}
-                >
-                  <span className={styles.answerNum}>{idx + 1}.</span>
-                  <span className={styles.answerText}>{answer.content}</span>
-                </button>
-              ))}
+              {currentQuestion.answers.map((answer, idx) => {
+                const { className, style } = getAnswerStyle(currentQuestion.id, answer.id);
+                return (
+                  <button
+                    key={answer.id}
+                    className={className}
+                    style={style}
+                    onClick={() => handleSelectAnswer(currentQuestion.id, answer.id)}
+                    disabled={isSubmitted}
+                  >
+                    <span className={styles.answerNum}>{idx + 1}.</span>
+                    <span className={styles.answerText}>{answer.content}</span>
+                  </button>
+                );
+              })}
             </div>
 
             {/* Explanation (Practice mode) */}
@@ -292,22 +320,67 @@ export default function ExamClient({ initialQuestions, config }: ExamClientProps
             )}
           </div>
 
-          {/* Bottom Navigation */}
-          <div className={styles.navRow}>
+          {/* Navigation Bar - only 2 buttons */}
+          <div className={styles.navBar}>
             <button
               className={styles.navBtn}
               onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
               disabled={currentIndex === 0}
             >
-              Câu Trước
+              ← Câu Trước
             </button>
+            <span className={styles.navIndicator}>
+              {currentIndex + 1} / {totalQuestions}
+            </span>
             <button
               className={styles.navBtnPrimary}
               onClick={() => setCurrentIndex((prev) => Math.min(totalQuestions - 1, prev + 1))}
               disabled={currentIndex === totalQuestions - 1}
             >
-              Câu Sau
+              Câu Sau →
             </button>
+          </div>
+
+          {/* Mobile: Question Grid Toggle + Grid */}
+          <div className={styles.mobileGridSection}>
+            <button
+              className={styles.gridToggleBtn}
+              onClick={() => setShowGrid((prev) => !prev)}
+            >
+              {showGrid ? "▲ Ẩn danh sách câu hỏi" : "▼ Xem danh sách câu hỏi"}
+              <span className={styles.gridToggleStats}>
+                ({Object.keys(selectedAnswers).length}/{totalQuestions} đã trả lời)
+              </span>
+            </button>
+            {showGrid && (
+              <div className={styles.mobileGrid}>
+                <div className={styles.questionGrid}>
+                  {questions.map((q, idx) => {
+                    let cls = styles.gridBtn;
+                    if (idx === currentIndex) cls += ` ${styles.gridBtnActive}`;
+                    else if (selectedAnswers[q.id]) cls += ` ${styles.gridBtnAnswered}`;
+                    return (
+                      <button
+                        key={q.id}
+                        className={cls}
+                        onClick={() => {
+                          setCurrentIndex(idx);
+                          setShowGrid(false);
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                      >
+                        {idx + 1}{q.isCritical ? "*" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!config.isPractice && (
+                  <button className={styles.endExamBtn} onClick={handleSubmit}>
+                    Kết thúc thi
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </section>
       </div>

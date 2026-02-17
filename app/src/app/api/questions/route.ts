@@ -5,6 +5,7 @@ import type { Question } from "@/lib/types";
 interface SafeAnswer {
   id: string;
   content: string;
+  isCorrect?: boolean;
 }
 
 interface SafeQuestion {
@@ -23,6 +24,8 @@ export async function GET(request: NextRequest) {
     const topicId = searchParams.get("topicId");
     const page = parseInt(searchParams.get("page") || "1", 10);
     const pageSize = parseInt(searchParams.get("pageSize") || "20", 10);
+    const mode = searchParams.get("mode");
+    const isPractice = mode === "practice";
 
     // Get questions, optionally filtered by topic
     const allQuestions = getQuestions({ topicId: topicId ?? undefined });
@@ -32,7 +35,8 @@ export async function GET(request: NextRequest) {
     const end = start + pageSize;
     const paginatedQuestions = allQuestions.slice(start, end);
 
-    // Strip correct answer info from response (hide from client during exam)
+    // In practice mode, include isCorrect so client can show right/wrong feedback
+    // In exam mode, strip isCorrect to prevent cheating
     const safeQuestions: SafeQuestion[] = paginatedQuestions.map((q: Question) => ({
       id: q.id,
       content: q.content,
@@ -43,7 +47,7 @@ export async function GET(request: NextRequest) {
       answers: q.answers.map((a) => ({
         id: a.id,
         content: a.content,
-        // isCorrect intentionally omitted
+        ...(isPractice ? { isCorrect: a.isCorrect } : {}),
       })),
     }));
 
