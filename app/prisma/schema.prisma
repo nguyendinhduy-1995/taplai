@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Topic {
+  id        String    @id @default(cuid())
+  name      String
+  parentId  String?
+  parent    Topic?    @relation("TopicToTopic", fields: [parentId], references: [id])
+  children  Topic[]   @relation("TopicToTopic")
+  questions Question[]
+}
+
+model Question {
+  id          String    @id @default(cuid())
+  content     String
+  explanation String?
+  imageUrl    String?
+  topicId     String
+  topic       Topic     @relation(fields: [topicId], references: [id])
+  answers     Answer[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Answer {
+  id         String   @id @default(cuid())
+  content    String
+  isCorrect  Boolean  @default(false)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id])
+}
